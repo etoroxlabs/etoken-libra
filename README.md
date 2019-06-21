@@ -1,4 +1,4 @@
-# A joyful early experiement of building eTokens on Libra 
+# A joyful early experiment of building eTokens on Libra 
 *by Dr. Omri Ross, Peter Emil Jensen and Johannes Rude Jensen*
 
 In this brief overview, we describe our initial experience with implementing the technology behind eToro tokenized assets, the ([eToken](https://github.com/etoroxlabs/etoken)) in the Move IR language for deployment on the Libra Network.
