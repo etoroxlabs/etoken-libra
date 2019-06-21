@@ -2,7 +2,7 @@ modules:
 
 module Capability {
 
-    // Capabaility is repoonsible for declaring an account's permissions.
+    // Capability is responsible for declaring an account's permissions.
     // We define the notion of an owner, minter and blacklisted.
     // Only the owner can assign blacklisted and minter capabilities.
 
@@ -29,7 +29,7 @@ module Capability {
         sender = get_txn_sender();
 
         // Publish owner capability if sender is the privileged account
-        // Uncommment the following line in production and use a real owner account: if (move(sender) == 0x0) {
+        // Uncomment the following line in production and use a real owner account: if (move(sender) == 0x0) {
         if (true) {
             // Always branch to here when testing, otherwise the test can't complete as the sender address is randomly chosen.
             Self.grant_owner_capability();
@@ -74,7 +74,7 @@ module Capability {
     }
 
     // This returns an immutable reference to the owner capability if it exists.
-    // Is used by the owner to show ownership to priviliged functions.
+    // Is used by the owner to show ownership to privileged functions.
     // Reverts if owner capability does not exist.
     public borrow_owner_capability(): &R#Self.Owner {
         let sender: address;
@@ -188,7 +188,7 @@ module EToken {
         payee_token_ref = borrow_global<T>(move(payee));
         payee_token_value = *(&copy(payee_token_ref).value);
 
-        // Unpack and destory to_deposit tokens
+        // Unpack and destroy to_deposit tokens
         T{ value: to_deposit_value } = move(to_deposit);
 
         // Increase the payees balance with the destroyed token amount
@@ -221,7 +221,7 @@ module EToken {
 
 script:
 
-// Perfoms simple testing to crudely verify the published modules above.
+// Performs simple testing to crudely verify the published modules above.
 
 import Transaction.Capability;
 import Transaction.EToken;
@@ -238,7 +238,7 @@ main() {
     // Publish initial capability
     Capability.publish();
 
-    // Borrow owner_capabiliy for minter delegation
+    // Borrow owner_capability for minter delegation
     owner_capability = Capability.borrow_owner_capability();
 
     // Delegate itself as a minter
@@ -256,7 +256,7 @@ main() {
     // Deposit the freshly minted tokens to itself
     EToken.deposit(move(sender), move(minted_tokens), move(capability));
 
-    // Test that the balance corresponds with the intended behavoir
+    // Test that the balance corresponds with the intended behaviour
     balance = EToken.balance();
     assert(move(balance) == 100, 3);
 
