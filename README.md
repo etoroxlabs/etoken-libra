@@ -184,7 +184,7 @@ If you are interested in learning more abou the Libra network and Move IR, we re
 * Follow the Libra `README` for how to compile and install it.
 * Clone this repository
 * Copy the eToken Move IR source code located at `src/eToken.mvir` in this repository, 
-  to the test folder in the Libra repository located at `language/functional_tests/tests/testsuite/module/`
+  to the test folder in the Libra repository located at `language/functional_tests/tests/testsuite/modules/`
 * Execute the following command somewhere in the Libra repository: `cargo test -p functional_tests eToken`
 
 ## Comment or Reach Out
