@@ -1,0 +1,321 @@
+// -----------------------------------------------------------------
+//  Developed by Quantstamp 
+//                           for eToro Libra token audit
+// -----------------------------------------------------------------
+
+// This set of transaction tests the following scenario 
+//      Alice grants minting capability to Bob
+//      Bob mints some tokens and checks if the balance is updated correctly. 
+
+//! account: alice
+//! account: bob
+
+//! sender: alice
+// Alice publishes the module Capability
+// Note that the within the code of test, it is possible to use directive as well
+// the if statement in the publish statement is therefore using alice's address
+
+module Capability {
+
+    // Capability is responsible for declaring an account's permissions.
+    // We define the notion of an owner, minter and blacklisted.
+    // Only the owner can assign blacklisted and minter capabilities.
+
+    // The owner is defined by hardcoding its account before publishing the module.
+
+    // -----------------------------------------------------------------
+
+    // Declare owner as a resource. It's only meant to be published once
+    resource Owner { }
+
+    // Declare a resource that declares an address's capabilities.
+    // Every address using EToken will need to publish a resource themselves.
+    // However, only the owner can change its content.
+    resource T {
+        minter: bool,
+        blacklisted: bool,
+    }
+
+    // Every account should execute this once before using Capability and EToken module.
+    // If the sender is the hardcoded owner, then owner capability is published.
+    // Reverts if already published
+    public publish() {
+        let sender: address;
+        sender = get_txn_sender();
+
+        // Publish owner capability if sender is the privileged account
+        // Uncomment the following line in production and use a real owner account: if (move(sender) == 0x0) {
+        //if (true) {
+        if (move(sender) == {{alice}}) {
+            // Always branch to here when testing, otherwise the test can't complete as the sender address is randomly chosen.
+            Self.grant_owner_capability();
+        }
+
+        // Publish a new capability with no permissions.
+        move_to_sender<T>(T{ minter: false, blacklisted: false });
+
+        return;    
+    }
+
+    // Internal function that grants owner capability
+    grant_owner_capability() {
+        move_to_sender<Owner>(Owner {});
+        return;
+    }
+
+    // Grants minter capability to receiver, but can only succeed if sender owns the owner capability.
+    public grant_minter_capability(receiver: address, owner_capability: &R#Self.Owner) {
+        let capability_ref: &mut R#Self.T;
+
+        release(move(owner_capability));
+
+        // Pull a mutable reference to the receiver's capability, and change its permission.
+        capability_ref = borrow_global<T>(move(receiver));
+        *(&mut move(capability_ref).minter) = true;
+
+        return;
+    }
+
+    // Grants blacklist capability to receiver, but can only succeed if sender owns the owner capability.
+    public grant_blacklisted_capability(receiver: address, owner_capability: &R#Self.Owner) {
+        let capability_ref: &mut R#Self.T;
+
+        release(move(owner_capability));
+
+        // Pull a mutable reference to the receiver's capability, and change its permission.
+        capability_ref = borrow_global<T>(move(receiver));
+        *(&mut move(capability_ref).blacklisted) = true;
+
+        return;
+    }
+
+    // This returns an immutable reference to the owner capability if it exists.
+    // Is used by the owner to show ownership to privileged functions.
+    // Reverts if owner capability does not exist.
+    public borrow_owner_capability(): &R#Self.Owner {
+        let sender: address;
+        let owner_capability_ref: &mut R#Self.Owner;
+        let owner_capability_immut_ref: &R#Self.Owner;
+
+        sender = get_txn_sender();
+        owner_capability_ref = borrow_global<Owner>(move(sender));
+        owner_capability_immut_ref = freeze(move(owner_capability_ref));
+
+        return move(owner_capability_immut_ref);
+    }
+
+    // This returns an immutable reference to the general capability if it exists.
+    // Should be used by every account to prove capabilities.
+    // Reverts if capability does not exist.
+    public borrow_capability(): &R#Self.T {
+        let sender: address;
+        let capability_ref: &mut R#Self.T;
+        let capability_immut_ref: &R#Self.T;
+
+        sender = get_txn_sender();
+        capability_ref = borrow_global<T>(move(sender));
+        capability_immut_ref = freeze(move(capability_ref));
+
+        return move(capability_immut_ref);
+    }
+
+    // Return whether the capability allows minting.
+    public is_minter(capability: &R#Self.T): bool {
+        let is_minter: bool;
+        is_minter = *(&move(capability).minter);
+        return move(is_minter);
+    }
+
+    // Return true the capability is not blacklisted.
+    public is_not_blacklisted(capability: &R#Self.T): bool {
+        let is_blacklisted: bool;
+        is_blacklisted = *(&move(capability).blacklisted);
+        return !move(is_blacklisted);
+    }
+
+    // Reverts if capability does not allow minting
+    public require_minter(capability: &R#Self.T) {
+        let is_minter: bool;
+        is_minter = Self.is_minter(move(capability));
+        assert(move(is_minter), 1);
+        return;
+    }
+
+    // Reverts if capability is blacklisted
+    public require_not_blacklisted(capability: &R#Self.T) {
+        let is_not_blacklisted: bool;
+        is_not_blacklisted = Self.is_not_blacklisted(move(capability));
+        assert(move(is_not_blacklisted), 2);
+        return;
+    }
+}
+
+//! new-transaction
+//! sender: alice
+// Alice publishes the module EToken
+
+module EToken {
+
+    // This module is responsible for an actual eToken.
+    // For it to be useful a capability has to be published by using the Capability module above.
+    
+    // -----------------------------------------------------------------
+
+    import {{alice}}.Capability;
+
+    // Declare the eToken resource, storing an account's total balance.
+    resource T {
+        value: u64,
+    }
+
+    // Publishes an initial zero eToken to the sender.
+    // Should be called once before using this module.
+    public publish() {
+        move_to_sender<T>(T{ value: 0 });
+        return;
+    }
+
+    // Mint new eTokens.
+    // Reverts if capability does not allow it.
+    public mint(value: u64, capability: &R#Capability.T): R#Self.T {
+        Capability.require_minter(move(capability));
+        return T{value: move(value)};
+    }
+
+    // Returns an account's eToken balance.
+    // Reverts if an initial eToken hasn't been published.
+    public balance(): u64 {
+        let sender: address;
+        let token_ref: &mut R#Self.T;
+        let token_value: u64;
+
+        sender = get_txn_sender();
+        token_ref = borrow_global<T>(move(sender));
+        token_value = *(&move(token_ref).value);
+
+        return move(token_value);
+    }
+
+    // Deposit owned tokens to an payee's address, and destroy the tokens to deposit,
+    // Reverts if user is blacklisted.
+    public deposit(payee: address, to_deposit: R#Self.T, capability: &R#Capability.T) {
+        let payee_token_ref: &mut R#Self.T;
+        let payee_token_value: u64;
+        let to_deposit_value: u64;
+
+        Capability.require_not_blacklisted(move(capability));
+
+        payee_token_ref = borrow_global<T>(move(payee));
+        payee_token_value = *(&copy(payee_token_ref).value);
+
+        // Unpack and destroy to_deposit tokens
+        T{ value: to_deposit_value } = move(to_deposit);
+
+        // Increase the payees balance with the destroyed token amount
+        *(&mut move(payee_token_ref).value) = move(payee_token_value) + move(to_deposit_value);
+
+        return;
+    }
+
+    // Withdraw an amount of tokens of the sender and return it.
+    // This works by splitting the token published and returning the specified amount as tokens. 
+    public withdraw(amount: u64, capability: &R#Capability.T): R#Self.T {
+        let sender: address;
+        let sender_token_ref: &mut R#Self.T;
+        let value: u64;
+
+        Capability.require_not_blacklisted(move(capability));
+
+        sender = get_txn_sender();
+        sender_token_ref = borrow_global<T>(move(sender));
+        value = *(&copy(sender_token_ref).value);
+
+        // Make sure that sender has enough tokens
+        assert(copy(value) >= copy(amount), 3);
+
+        // Split the senders token and return the amount specified
+        *(&mut move(sender_token_ref).value) = move(value) - copy(amount);
+        return T{ value: move(amount) };
+    }
+}
+
+
+//! new-transaction
+//! sender: alice
+// Alice publishes the module
+
+import {{alice}}.Capability;
+import {{alice}}.EToken;
+
+main(){
+
+    // Publish initial capability and Token
+    Capability.publish();
+    EToken.publish();
+ 
+    return;
+}
+
+//! new-transaction
+//! sender: bob
+// Bob publishes the module
+
+import {{alice}}.Capability;
+import {{alice}}.EToken;
+
+main(){
+
+    // Publish initial capability and Token
+    Capability.publish();
+    EToken.publish();
+ 
+    return;
+}
+
+//! new-transaction
+//! sender: alice
+// Alice grants minting capability to Bob
+
+import {{alice}}.Capability;
+import {{alice}}.EToken;
+
+main(){
+    let owner_capability: &R#Capability.Owner;
+
+    // Borrow owner_capability for minter delegation
+    owner_capability = Capability.borrow_owner_capability();
+
+    // Delegate itself as a minter
+    Capability.grant_minter_capability({{bob}}, move(owner_capability));  
+
+    return;
+}
+
+//! new-transaction
+//! sender: bob
+// Bob mints 100, and checks if the balance is correct
+
+import {{alice}}.Capability;
+import {{alice}}.EToken;
+
+main(){
+    let sender: address;
+    let capability: &R#Capability.T;
+    let minted_tokens: R#EToken.T;
+    let balance: u64;
+
+    sender = get_txn_sender();
+    // Borrow general capability for proof of minting capability
+    capability = Capability.borrow_capability();
+
+    // Mint 100 eTokens and prove minter capability
+    minted_tokens = EToken.mint(100, copy(capability));
+
+    // Deposit the freshly minted tokens to itself
+    EToken.deposit(move(sender), move(minted_tokens), move(capability));
+
+    // Test that the balance corresponds with the intended behaviour
+    balance = EToken.balance();
+    assert(move(balance) == 100, 4);    
+    return;    
+}
