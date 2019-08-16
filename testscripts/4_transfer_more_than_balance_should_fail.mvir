@@ -6,7 +6,7 @@
 // This set of transaction tests the following scenario: 
 //      Alice mints some coin and tries to transfer even more to Bob.
 //      This transfer should fail on the line: 
-//                          copy(value) >= copy(amount)
+//                          assert(copy(value) >= copy(amount), 3);
 //      in the function withdraw()
 
 //! account: alice
