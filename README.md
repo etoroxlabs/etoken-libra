@@ -8,8 +8,8 @@ The Libra protocol is a deterministic state machine that stores data in a versio
 Currently, Libra doesn't allow modules to be published, which is why the source code for eToken is meant
 to be run as a test. The full source code for this Move IR eToken implementation can be found [here](https://github.com/etoroxlabs/etoken-libra/blob/master/src/eToken.mvir).
 
-This test has been executed with the Libra version at commit hash `#004d472`.
-The repository can be found [here](https://github.com/libra/libra/tree/004d472284ce7d3a0ce2f577ecd05de56026dbd4).
+This test has been executed with the Libra version at commit hash `#69cab6cc875312ae53bdc8a7f9709e39e54ed032`.
+The repository can be found [here](https://github.com/libra/libra/tree/69cab6cc875312ae53bdc8a7f9709e39e54ed032).
 
 ## The Move Intermediate Representation Language
 With the release of Libra, a new domain-specific language named Move has been defined. 

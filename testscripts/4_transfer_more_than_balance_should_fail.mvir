@@ -36,6 +36,7 @@ module Capability {
     resource T {
         minter: bool,
         blacklisted: bool,
+        available_mint: u64,
     }
 
     // Every account should execute this once before using Capability and EToken module.
@@ -54,7 +55,7 @@ module Capability {
         }
 
         // Publish a new capability with no permissions.
-        move_to_sender<T>(T{ minter: false, blacklisted: false });
+        move_to_sender<T>(T{ minter: false, blacklisted: false, available_mint: 0 });
 
         return;    
     }
@@ -65,6 +66,35 @@ module Capability {
         return;
     }
 
+    // Check that the minter has enough allowed amount to mint and fails if that is not the case.
+    // Otherwise it continues and subtracts the minted amount from the available.
+    public check_and_decrease_available_mint(amount: u64) {
+        let sender: address;
+        let capability_ref: &mut R#Self.T;
+        let available_mint: u64;
+        let has_enough_available: bool;
+
+        sender = get_txn_sender();
+        capability_ref = borrow_global<T>(move(sender));
+        available_mint = *(&copy(capability_ref).available_mint);
+        has_enough_available = copy(available_mint) >= copy(amount);
+
+        // Check that minter has enough available amount to mint, otherwise fail
+        assert(move(has_enough_available), 4);
+
+        // Update new remaining minting amount
+        *(&mut move(capability_ref).available_mint) = move(available_mint) - move(amount);
+
+        return;
+    }
+
+    // Return the available minting amount from given capability
+    public get_available_mint(capability: &R#Self.T): u64 {
+        let available_mint: u64;
+        available_mint = *(&move(capability).available_mint);
+        return move(available_mint);
+    }
+
     // Grants minter capability to receiver, but can only succeed if sender owns the owner capability.
     public grant_minter_capability(receiver: address, owner_capability: &R#Self.Owner) {
         let capability_ref: &mut R#Self.T;
@@ -73,7 +103,22 @@ module Capability {
 
         // Pull a mutable reference to the receiver's capability, and change its permission.
         capability_ref = borrow_global<T>(move(receiver));
-        *(&mut move(capability_ref).minter) = true;
+        *(&mut copy(capability_ref).minter) = true;
+        *(&mut move(capability_ref).available_mint) = 1000;
+
+        return;
+    }
+
+    // Revoke minter capability from receiver, but can only succeed if sender owns the owner capability.  
+    public revoke_minter_capability(revokee: address, owner_capability: &R#Self.Owner) {
+        let capability_ref: &mut R#Self.T;
+
+        release(move(owner_capability));
+
+        // Pull a mutable reference to the receiver's capability, and change its permission.
+        capability_ref = borrow_global<T>(move(revokee));
+        *(&mut copy(capability_ref).minter) = false;
+        *(&mut move(capability_ref).available_mint) = 0;
 
         return;
     }
@@ -87,6 +132,19 @@ module Capability {
         // Pull a mutable reference to the receiver's capability, and change its permission.
         capability_ref = borrow_global<T>(move(receiver));
         *(&mut move(capability_ref).blacklisted) = true;
+
+        return;
+    }
+
+    // Revoke blacklist capability from receiver, but can only succeed if sender owns the owner capability.         
+    public revoke_blacklisted_capability(revokee: address, owner_capability: &R#Self.Owner) {
+        let capability_ref: &mut R#Self.T;
+
+        release(move(owner_capability));
+
+        // Pull a mutable reference to the receiver's capability, and change its permission.
+        capability_ref = borrow_global<T>(move(revokee));
+        *(&mut move(capability_ref).blacklisted) = false;
 
         return;
     }
@@ -181,6 +239,7 @@ module EToken {
     // Reverts if capability does not allow it.
     public mint(value: u64, capability: &R#Capability.T): R#Self.T {
         Capability.require_minter(move(capability));
+        Capability.check_and_decrease_available_mint(copy(value));
         return T{value: move(value)};
     }
 
@@ -252,7 +311,8 @@ import {{alice}}.EToken;
 main(){
     let sender: address;
     let owner_capability: &R#Capability.Owner;
-    let capability: &R#Capability.T;
+    let capability_1: &R#Capability.T;
+    let capability_2: &R#Capability.T;
     let minted_tokens: R#EToken.T;
     let balance: u64;
 
@@ -268,16 +328,17 @@ main(){
     Capability.grant_minter_capability(copy(sender), move(owner_capability));
 
     // Borrow general capability for proof of minting capability
-    capability = Capability.borrow_capability();
+    capability_1 = Capability.borrow_capability();
 
     // Publish an eToken account
     EToken.publish();
 
     // Mint 100 eTokens and prove minter capability
-    minted_tokens = EToken.mint(100, copy(capability));
+    minted_tokens = EToken.mint(100, move(capability_1));
 
     // Deposit the freshly minted tokens to itself
-    EToken.deposit(move(sender), move(minted_tokens), move(capability));
+    capability_2 = Capability.borrow_capability();
+    EToken.deposit(move(sender), move(minted_tokens), move(capability_2));
 
     // Test that the balance corresponds with the intended behaviour
     balance = EToken.balance();
@@ -297,7 +358,8 @@ import {{alice}}.EToken;
 main(){
     let sender: address;
     let owner_capability: &R#Capability.Owner;
-    let capability: &R#Capability.T;
+    let capability_1: &R#Capability.T;
+    let capability_2: &R#Capability.T;
     let minted_tokens: R#EToken.T;
     let balance: u64;
 
@@ -310,13 +372,14 @@ main(){
     Capability.grant_minter_capability(copy(sender), move(owner_capability));
 
     // Borrow general capability for proof of minting capability
-    capability = Capability.borrow_capability();
+    capability_1 = Capability.borrow_capability();
 
     // Mint 100 eTokens and prove minter capability
-    minted_tokens = EToken.mint(100, copy(capability));
+    minted_tokens = EToken.mint(100, move(capability_1));
 
     // Deposit the freshly minted tokens to itself
-    EToken.deposit(move(sender), move(minted_tokens), move(capability));
+    capability_2 = Capability.borrow_capability();
+    EToken.deposit(move(sender), move(minted_tokens), move(capability_2));
 
     // Test that the balance corresponds with the intended behaviour
     balance = EToken.balance();
