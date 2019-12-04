@@ -1,16 +1,6 @@
-// -----------------------------------------------------------------
-//  Developed by Quantstamp
-//                           for eToro Libra token audit
-// -----------------------------------------------------------------
-
-// This set of transaction tests the following scenario
-//      Alice mints token and transfers to Bob
-//      Bob transfers some token to Alice and succeeded
-//      Alice blacklists Bob.
-//      Bob tries to transfer some token to Alice,
-//      this should fail on:
-//          assert(move(is_not_blacklisted), 2);
-//      in the function require_not_blacklisted()
+// This set of transaction tests the following scenario:
+//      Alice deploys the module, proves ownership and mints token
+//      Alice burns tokens and checks that the balance matches
 
 //! account: alice
 //! account: bob
@@ -51,8 +41,7 @@ module Capability {
 
         // Publish owner capability if sender is the privileged account
         // Uncomment the following line in production and use a real owner account: if (move(sender) == 0x0) {
-        //if (true) {
-        if (move(sender) == {{alice}}) {
+        if (true) {
             // Always branch to here when testing, otherwise the test can't complete as the sender address is randomly chosen.
             Self.grant_owner_capability();
         }
@@ -112,7 +101,7 @@ module Capability {
         return;
     }
 
-    // Revoke minter capability from receiver, but can only succeed if sender owns the owner capability.  
+    // Revoke minter capability from receiver, but can only succeed if sender owns the owner capability.
     public revoke_minter_capability(revokee: address, owner_capability: &R#Self.Owner) {
         let capability_ref: &mut R#Self.T;
 
@@ -139,7 +128,7 @@ module Capability {
         return;
     }
 
-    // Revoke blacklist capability from receiver, but can only succeed if sender owns the owner capability.         
+    // Revoke blacklist capability from receiver, but can only succeed if sender owns the owner capability.
     public revoke_blacklisted_capability(revokee: address, owner_capability: &R#Self.Owner) {
         let capability_ref: &mut R#Self.T;
 
@@ -200,7 +189,7 @@ module Capability {
     public require_minter(capability: &R#Self.T) {
         let is_minter: bool;
         is_minter = Self.is_minter(move(capability));
-        assert(move(is_minter), 1);
+        assert(move(is_minter), 0);
         return;
     }
 
@@ -208,7 +197,7 @@ module Capability {
     public require_not_blacklisted(capability: &R#Self.T) {
         let is_not_blacklisted: bool;
         is_not_blacklisted = Self.is_not_blacklisted(move(capability));
-        assert(move(is_not_blacklisted), 2);
+        assert(move(is_not_blacklisted), 0);
         return;
     }
 }
@@ -304,14 +293,13 @@ module EToken {
         value = *(&copy(sender_token_ref).value);
 
         // Make sure that sender has enough tokens
-        assert(copy(value) >= copy(amount), 3);
+        assert(copy(value) >= copy(amount), 1);
 
         // Split the senders token and return the amount specified
         *(&mut move(sender_token_ref).value) = move(value) - copy(amount);
         return T{ value: move(amount) };
     }
 }
-
 
 //! new-transaction
 //! sender: alice
@@ -358,52 +346,33 @@ main(){
     return;
 }
 
-
 //! new-transaction
 //! sender: alice
-// Alice mint again, reaching 200
-
+// Alice burns another 50 tokens by resource
 
 import {{alice}}.Capability;
 import {{alice}}.EToken;
 
 main(){
-    let sender: address;
-    let owner_capability: &R#Capability.Owner;
-    let capability_1: &R#Capability.T;
-    let capability_2: &R#Capability.T;
-    let minted_tokens: R#EToken.T;
+    let withdrawn_tokens: R#EToken.T;
+    let capability: &R#Capability.T;
     let balance: u64;
+    // Test that the balance corresponds with the intended behaviour
+    capability = Capability.borrow_capability();
 
-    sender = get_txn_sender();
+    withdrawn_tokens = EToken.withdraw(50, move(capability));
 
-    // Borrow owner_capability for minter delegation
-    owner_capability = Capability.borrow_owner_capability();
-
-    // Delegate itself as a minter
-    Capability.grant_minter_capability(copy(sender), move(owner_capability));
-
-    // Borrow general capability for proof of minting capability
-    capability_1 = Capability.borrow_capability();
-
-    // Mint 100 eTokens and prove minter capability
-    minted_tokens = EToken.mint(100, move(capability_1));
-
-    // Deposit the freshly minted tokens to itself
-    capability_2 = Capability.borrow_capability();
-    EToken.deposit(move(sender), move(minted_tokens), move(capability_2));
-
+    EToken.burn(move(withdrawn_tokens));
     // Test that the balance corresponds with the intended behaviour
     balance = EToken.balance();
-    assert(move(balance) == 200, 4);
+    assert(move(balance) == 50, 4);
     return;
 }
 
 //! new-transaction
 //! sender: alice
-// Alice checks her account has 200 eToken
+// Alice checks her account has 50 eToken
 
-import {{alice}}.Capability;
 import {{alice}}.EToken;
 
 main(){
@@ -411,165 +380,7 @@ main(){
 
     // Test that the balance corresponds with the intended behaviour
     balance = EToken.balance();
-    assert(move(balance) == 200, 1);
+    assert(move(balance) == 50, 1);
     return;
 }
 
-//! new-transaction
-//! sender: bob
-// Bob publishes EToken and Capability under his account.
-
-import {{alice}}.Capability;
-import {{alice}}.EToken;
-
-main(){
-    // Publish initial capability
-    Capability.publish();
-    // Publish eToken
-    EToken.publish();
-    return;
-}
-
-//! new-transaction
-//! sender: bob
-// Bob checks his account has 0 eToken
-
-import {{alice}}.Capability;
-import {{alice}}.EToken;
-
-main(){
-    let balance: u64;
-
-    // Test that the balance corresponds with the intended behaviour
-    balance = EToken.balance();
-    assert(move(balance) == 0, 1);
-    return;
-}
-
-//! new-transaction
-//! sender: alice
-// Alice transfers 99 EToken to Bob
-
-import {{alice}}.Capability;
-import {{alice}}.EToken;
-
-main(){
-
-    let etk_coin: R#EToken.T;
-    let etk_cap: &R#Capability.T;
-    // Test that the balance corresponds with the intended behaviour
-    etk_cap = Capability.borrow_capability();
-
-    etk_coin = EToken.withdraw(99, copy(etk_cap));
-    // deposit(payee: address, to_deposit: R#Self.T, capability: &R#Capability.T)
-    EToken.deposit({{bob}}, move(etk_coin), move(etk_cap));
-    return;
-}
-
-
-//! new-transaction
-//! sender: alice
-// Alice checks her account has 101 eToken
-
-import {{alice}}.Capability;
-import {{alice}}.EToken;
-
-main(){
-    let balance: u64;
-
-    // Test that the balance corresponds with the intended behaviour
-    balance = EToken.balance();
-    assert(move(balance) == 101, 1);
-    return;
-}
-
-//! new-transaction
-//! sender: bob
-// Bob checks his account has 99 eToken
-
-import {{alice}}.Capability;
-import {{alice}}.EToken;
-
-main(){
-    let balance: u64;
-
-    // Test that the balance corresponds with the intended behaviour
-    balance = EToken.balance();
-    assert(move(balance) == 99, 1);
-    return;
-}
-
-//! new-transaction
-//! sender: bob
-// Bob transfers 10 EToken to Alice
-
-import {{alice}}.Capability;
-import {{alice}}.EToken;
-
-main(){
-
-    let etk_coin: R#EToken.T;
-    let etk_cap: &R#Capability.T;
-    // Test that the balance corresponds with the intended behaviour
-    etk_cap = Capability.borrow_capability();
-
-    etk_coin = EToken.withdraw(10, copy(etk_cap));
-    // deposit(payee: address, to_deposit: R#Self.T, capability: &R#Capability.T)
-    EToken.deposit({{alice}}, move(etk_coin), move(etk_cap));
-    return;
-}
-
-//! new-transaction
-//! sender: alice
-// Alice checks her account has 111 eToken
-
-import {{alice}}.Capability;
-import {{alice}}.EToken;
-
-main(){
-    let balance: u64;
-
-    // Test that the balance corresponds with the intended behaviour
-    balance = EToken.balance();
-    assert(move(balance) == 111, 1);
-    return;
-}
-
-//! new-transaction
-//! sender: alice
-// Alice transfers 99 EToken to Bob
-
-import {{alice}}.Capability;
-import {{alice}}.EToken;
-
-main(){
-
-    let etk_owner_cap: &R#Capability.Owner;
-    // Test that the balance corresponds with the intended behaviour
-    etk_owner_cap = Capability.borrow_owner_capability();
-    Capability.grant_blacklisted_capability({{bob}}, move(etk_owner_cap));
-
-    return;
-}
-
-//! new-transaction
-//! sender: bob
-// Bob transfers 10 EToken to Alice
-
-import {{alice}}.Capability;
-import {{alice}}.EToken;
-
-main(){
-
-    let etk_coin: R#EToken.T;
-    let etk_cap: &R#Capability.T;
-    // Test that the balance corresponds with the intended behaviour
-    etk_cap = Capability.borrow_capability();
-
-    etk_coin = EToken.withdraw(10, copy(etk_cap));
-    // deposit(payee: address, to_deposit: R#Self.T, capability: &R#Capability.T)
-    EToken.deposit({{alice}}, move(etk_coin), move(etk_cap));
-    return;
-}
-
-// check: Aborted(2)

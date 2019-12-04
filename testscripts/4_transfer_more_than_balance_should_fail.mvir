@@ -1,11 +1,11 @@
 // -----------------------------------------------------------------
-//  Developed by Quantstamp 
+//  Developed by Quantstamp
 //                           for eToro Libra token audit
 // -----------------------------------------------------------------
 
-// This set of transaction tests the following scenario: 
+// This set of transaction tests the following scenario:
 //      Alice mints some coin and tries to transfer even more to Bob.
-//      This transfer should fail on the line: 
+//      This transfer should fail on the line:
 //                          assert(copy(value) >= copy(amount), 3);
 //      in the function withdraw()
 
@@ -57,7 +57,7 @@ module Capability {
         // Publish a new capability with no permissions.
         move_to_sender<T>(T{ minter: false, blacklisted: false, available_mint: 0 });
 
-        return;    
+        return;
     }
 
     // Internal function that grants owner capability
@@ -218,7 +218,7 @@ module EToken {
 
     // This module is responsible for an actual eToken.
     // For it to be useful a capability has to be published by using the Capability module above.
-    
+
     // -----------------------------------------------------------------
 
     import {{alice}}.Capability;
@@ -241,6 +241,15 @@ module EToken {
         Capability.require_minter(move(capability));
         Capability.check_and_decrease_available_mint(copy(value));
         return T{value: move(value)};
+    }
+
+    // Burn owned tokens
+    public burn(to_burn: R#Self.T) {
+        let to_burn_value: u64;
+
+        // Unpack and destroy tokens
+        T { value: to_burn_value } = move(to_burn);
+        return;
     }
 
     // Returns an account's eToken balance.
@@ -279,7 +288,7 @@ module EToken {
     }
 
     // Withdraw an amount of tokens of the sender and return it.
-    // This works by splitting the token published and returning the specified amount as tokens. 
+    // This works by splitting the token published and returning the specified amount as tokens.
     public withdraw(amount: u64, capability: &R#Capability.T): R#Self.T {
         let sender: address;
         let sender_token_ref: &mut R#Self.T;
@@ -342,7 +351,7 @@ main(){
 
     // Test that the balance corresponds with the intended behaviour
     balance = EToken.balance();
-    assert(move(balance) == 100, 4);    
+    assert(move(balance) == 100, 4);
     return;
 }
 
@@ -383,7 +392,7 @@ main(){
 
     // Test that the balance corresponds with the intended behaviour
     balance = EToken.balance();
-    assert(move(balance) == 200, 4);    
+    assert(move(balance) == 200, 4);
     return;
 }
 
@@ -399,13 +408,13 @@ main(){
 
     // Test that the balance corresponds with the intended behaviour
     balance = EToken.balance();
-    assert(move(balance) == 200, 1);    
+    assert(move(balance) == 200, 1);
     return;
 }
 
 //! new-transaction
 //! sender: bob
-// Bob publishes EToken and Capability under his account. 
+// Bob publishes EToken and Capability under his account.
 
 import {{alice}}.Capability;
 import {{alice}}.EToken;
@@ -430,7 +439,7 @@ main(){
 
     // Test that the balance corresponds with the intended behaviour
     balance = EToken.balance();
-    assert(move(balance) == 0, 1);    
+    assert(move(balance) == 0, 1);
     return;
 }
 
